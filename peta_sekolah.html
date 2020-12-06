@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Analisis Spasial Infrastruktur Pendidikan</title>
+<meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+<script src="https://api.mapbox.com/mapbox-gl-js/v1.12.0/mapbox-gl.js"></script>
+<link href="https://api.mapbox.com/mapbox-gl-js/v1.12.0/mapbox-gl.css" rel="stylesheet" />
+<style>
+	body {
+            margin: 0;
+            padding: 0;
+        }
+        
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+        
+        #sidebar {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            bottom: 350px;
+            width: 250px;
+            overflow: auto;
+            background: rgba(255, 255, 255, 0.8);
+            font-family: "Arial";
+            padding-left: 10px;
+        }	
+</style>
+</head>
+<body>
+
+<div id='map'></div>
+    <div id='sidebar'>
+        <h4>Angka Partisipasi Murni</h4>
+        <h4>Tahun 2019</h4>
+        <div id="tooltip-name"></div>
+        <div id='tooltip1'></div>
+		<div id='tooltip2'></div>
+		<div id='tooltip3'></div>
+    </div>
+
+
+ 
+<script>
+	mapboxgl.accessToken = 'pk.eyJ1Ijoid2ljYWt6b25lIiwiYSI6ImNrOThjeW51dTFnMDczZ21zazBkZTFvNGYifQ.k7XiY-gCRUpHbgVIInsLvg';
+var map = new mapboxgl.Map({
+container: 'map', // container id
+style: 'mapbox://styles/mapbox/streets-v11', // style URL
+center: [118,-0.77], // starting position [lng, lat]
+zoom: 4.2 // starting zoom
+});
+
+var hoveredStateId = null;
+ 
+map.on('load', function () {
+// Add a new source from our GeoJSON data and
+// set the 'cluster' option to true. GL-JS will
+// add the point_count property to your source data.
+
+
+map.addSource('apm', {
+type: 'geojson',
+
+data:
+'https://raw.githubusercontent.com/wicakzone/mapbox/main/kabupaten_apm.geojson',
+cluster: false,
+generateId: true});
+
+
+map.addLayer(
+{
+'id': 'apm-kab',
+'source': 'apm',
+'type': 'fill',
+'paint': {
+'fill-color': [
+'interpolate',
+['linear'],
+['get', 'apm_3'],
+0.2,
+'#dffc03',
+0.9,
+'#130485'
+],
+'fill-opacity': [
+'case',
+['boolean', ['feature-state', 'hover'], false],
+0.9,
+0.75]
+
+}
+}
+);
+
+
+map.addLayer({
+'id': 'state-borders',
+'type': 'line',
+'source': 'apm-kab',
+'layout': {},
+'paint': {
+'line-color': '#627BC1',
+'line-width': 2
+}
+});
+
+
+
+
+
+
+map.addSource('sekolah', {
+type: 'geojson',
+// Point to GeoJSON data. This example visualizes all M1.0+ sekolah
+
+data:
+'https://raw.githubusercontent.com/wicakzone/mapbox/main/excess_class_json3.geojson',
+cluster: true,
+clusterMaxZoom: 5, // Max zoom to cluster points on
+clusterRadius: 50 // Radius of each cluster when clustering points (defaults to 50)
+});
+
+
+ 
+map.addLayer({
+id: 'unclustered-point',
+type: 'circle',
+source: 'sekolah',
+filter: ['!', ['has', 'point_count']],
+paint: {
+'circle-radius': 4,
+'circle-stroke-width': 1,
+'circle-stroke-color': '#0c0d0c',
+'circle-color': [
+'match',
+['get', 'bentuk_pendidikan'],
+'SD',
+'#f50a0a',
+'SMP',
+'#0e0af5',
+'SMA',
+'#57ffff',
+'SMK',
+'#d8ff57',
+/* other */ '#ccc'
+]
+}
+});
+
+
+
+
+
+
+ 
+ 
+map.on("mousemove","apm-kab", function (e) {
+            var features = map.queryRenderedFeatures(e.point, {
+                layers: ["apm-kab"]
+            });
+			
+            if (e.features.length > 0) {
+                
+				if (hoveredStateId) {
+						map.setFeatureState(
+						{ source: 'apm', id: hoveredStateId },
+						{ hover: false }
+						);
+					}
+				hoveredStateId = e.features[0].id;
+				map.setFeatureState(
+						{ source: 'apm', id: hoveredStateId },
+						{ hover: true }
+						);			
+				
+				//show name and value in sidebar
+                document.getElementById('tooltip-name').innerHTML = "Kabupaten/Kota " + features[0].properties.KABKOT;
+                document.getElementById('tooltip1').innerHTML = "APM SMA: "+ features[0].properties.apm_3.toFixed(2);
+				document.getElementById('tooltip2').innerHTML = "APM SMP: "+ features[0].properties.apm_2.toFixed(2);
+				document.getElementById('tooltip3').innerHTML = "APM SD: "+ features[0].properties.apm_1.toFixed(2);
+				
+				//document.getElementById('tooltip').innerHTML = hoverStateId;
+                //for troubleshooting - show complete features info
+                //document.getElementById('tooltip').innerHTML = JSON.stringify(features, null, 2);
+				
+				
+            } else {
+                //if not hovering over a feature set tooltip to empty
+                document.getElementById('tooltip-name').innerHTML = "";
+                document.getElementById('tooltip').innerHTML = "";
+            }
+        }); 
+ 
+map.on('mouseleave', 'apm-kab', function () {
+if (hoveredStateId) {
+map.setFeatureState(
+{ source: 'apm', id: hoveredStateId },
+{ hover: false }
+);
+}
+hoveredStateId = null;
+}); 
+ 
+ 
+ 
+// inspect a cluster on click
+map.on('click', 'clusters', function (e) {
+var features = map.queryRenderedFeatures(e.point, {
+layers: ['clusters']
+});
+var clusterId = features[0].properties.cluster_id;
+map.getSource('sekolah').getClusterExpansionZoom(
+clusterId,
+function (err, zoom) {
+if (err) return;
+ 
+map.easeTo({
+center: features[0].geometry.coordinates,
+zoom: zoom
+});
+}
+);
+});
+ 
+// When a click event occurs on a feature in
+// the unclustered-point layer, open a popup at
+// the location of the feature, with
+// description HTML from its properties.
+map.on('click', 'unclustered-point', function (e) {
+var coordinates = e.features[0].geometry.coordinates.slice();
+var nama_sekolah = e.features[0].properties.nama_sekolah;
+var rombel = e.features[0].properties.rombel;
+var ptk = e.features[0].properties.ptk;
+var jml_rk = e.features[0].properties.jml_rk;
+var pd = e.features[0].properties.pd;
+var rasio_siswa_guru = pd/ptk;
+var rasio_siswa_guru = rasio_siswa_guru.toFixed(2);
+var rasio_kelas_rombel = jml_rk/rombel;
+var rasio_kelas_rombel = rasio_kelas_rombel.toFixed(2);
+var sekolah_id=e.features[0].properties.sekolah_id;
+
+ 
+// Ensure that if the map is zoomed out such that
+// multiple copies of the feature are visible, the
+// popup appears over the copy being pointed to.
+while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
+coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
+}
+ 
+new mapboxgl.Popup()
+.setLngLat(coordinates)
+.setHTML(
+'Nama sekolah: ' + nama_sekolah + '<br>Rombel: ' + rombel + '<br>Ruang Kelas: ' + 
+jml_rk + '<br>Siswa: ' + pd + '<br>Guru: ' + ptk + '<br>Rasio Kelas Rombel: ' + rasio_kelas_rombel +
+'<br>Rasio Siswa Guru: ' + rasio_siswa_guru +
+'<br> <a href="http://sekolah.data.kemdikbud.go.id/index.php/chome/profil/'+ sekolah_id +'" target="_blank">Profil</a>'
+)
+.addTo(map);
+});
+ 
+map.on('mouseenter', 'apm-kab', function () {
+map.getCanvas().style.cursor = 'pointer';
+});
+map.on('mouseleave', 'apm-kab', function () {
+map.getCanvas().style.cursor = '';
+});
+});
+
+map.addControl(new mapboxgl.NavigationControl());
+
+</script>
+ 
+</body>
+</html>
